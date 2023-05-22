@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>962a5e13-e568-4091-902f-5c07d9dff579</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>PNS_Scraper_v1.py</StartupFile>
+    <StartupFile>PNS_Scraper_v1.1.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -21,7 +21,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="PNS_Scraper_v1.py" />
+    <Compile Include="PNS_Scraper_v1.1.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

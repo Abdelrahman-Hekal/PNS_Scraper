@@ -70,7 +70,7 @@ def process_links(driver, links, settings):
         print(f'Processing input link {i+1}/{n}...')
         # single product link
         if '/p/' in link:
-            df = df.append([{'Link': link}])
+            df = df.append([{'Link':link, 'Input Link':link}])
             continue
 
         driver.get(link)
@@ -98,7 +98,7 @@ def process_links(driver, links, settings):
                 try:
                     url = title.get_attribute('href')
                     if '/p/' in url:
-                        df = df.append([{'Link': url}])
+                        df = df.append([{'Link': url, 'Input Link':link}])
                         nprods += 1
                     if nprods == prods_limit:
                         break
@@ -118,12 +118,13 @@ def process_links(driver, links, settings):
     # return products links
     df.drop_duplicates(inplace=True)
     prod_links = df['Link'].values.tolist()
-    return prod_links
+    input_links = df['Input Link'].values.tolist()
+    return prod_links, input_links
 
 
-def scrape_prods(driver, prod_links, output1, output2, settings):
+def scrape_prods(driver, prod_links, input_links, output1, output2, settings):
 
-    keys = ["Product ID","Product URL",	"Product Title","Product Price","Product Origin","Product Category","Product Description","Product Delivery","Product Rating","Product Image","Return Info","Store Name","Store Rating","Sold"]
+    keys = ["Product ID","Product URL",	"Product Title", "Brand", "Price (HKD)","Product Origin","Product Category","Product Description","Product Delivery","Product Rating","Image URL", "Promotion", "Availability", "Input Link"]
 
     print('-'*100)
     print('Scraping links')
@@ -154,22 +155,21 @@ def scrape_prods(driver, prod_links, output1, output2, settings):
 
         # handling 404 error
         try:
-            wait(driver, 3).until(EC.presence_of_element_located((By.XPATH, "//meta[@content='404 Not Found | PARKnSHOP eShop']")))  
+            wait(driver, 5).until(EC.presence_of_element_located((By.XPATH, "//meta[@content='404 Not Found | PARKnSHOP eShop']")))  
             print(f'Warning - 404 Error in link: {link}')
             continue
         except:
             pass
            
-        # scrolling across the page for auto translation to be applied
+        # scrolling across the page 
         try:
-            htmlelement= wait(driver, 3).until(EC.presence_of_element_located((By.TAG_NAME, "html")))
+            htmlelement= wait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "html")))
             total_height = driver.execute_script("return document.body.scrollHeight")
             height = total_height/30
             new_height = 0
             for _ in range(40):
                 prev_hight = new_height
                 new_height += height             
-                driver.execute_script(f"window.scrollTo({prev_hight}, {new_height})")
                 driver.execute_script(f"window.scrollTo({prev_hight}, {new_height})")
                 time.sleep(0.1)
         except:
@@ -180,120 +180,149 @@ def scrape_prods(driver, prod_links, output1, output2, settings):
             prod['Product URL'] = link
 
             # scraping product ID
+            ID = ''
             try:
-                ID = link.split('/p/BP_')[-1]     
-                prod['Product ID'] = ID    
+                ID = link.split('/p/BP_')[-1]      
+                prod['Product ID'] = ID   
             except:
-                prod['Product ID'] = ''
                 pass
+
+
 
             # scraping product title
+            title, unit = '', ''
             try:
-                title = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1.product-name"))).get_attribute('textContent')
+                title = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1.product-name"))).get_attribute('textContent')
                 prod['Product Title'] = title
-                brand = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.product-brand"))).get_attribute('textContent').strip()
-                prod['Product Title'] = brand + ' - ' + title
+                unit = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[class='product-unit']"))).get_attribute('textContent').strip()
+                prod['Product Title'] = title + ' ' + f"({unit})"
             except:
-                prod['Product Title'] = ''
+                pass           
+           
+            # scraping product brand
+            brand = ''
+            try:
+                brand = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[class='product-brand']"))).get_attribute('textContent')
+                prod['Brand'] = brand
+            except:
                 pass
                 
-            # scraping product price
+            # scraping Price (HKD)
+            price = ''
             try:
-                price_div = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.product-price-group")))
+                price_div = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.product-price-group")))
                 try:
-                    price = wait(price_div, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "span[class='isDiscount currentPrice']"))).get_attribute('textContent').replace('$', '').replace(',', '').strip()
+                    price = wait(price_div, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "span[class*='currentPrice']"))).get_attribute('textContent').replace('$', '').replace(',', '').strip()
                 except:
-                    price = price_div.get_attribute('textContent').replace('$', '').replace(',', '').strip()
+                    price = wait(price_div, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='currentPrice']"))).get_attribute('textContent').replace('$', '').replace(',', '').strip()
 
-                prod['Product Price'] = price
+                prod['Price (HKD)'] = price
             except:
-                prod['Product Price'] = ''
                 pass
 
             # scraping product origion
+            origin = ''
             try:
-                origin_tile = wait(driver, 3).until(EC.presence_of_element_located((By.TAG_NAME, "pns-origin")))
-                origin = wait(origin_tile, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.info-content"))).get_attribute('textContent')
-                prod['Product Origin'] = origin       
+                origin_tile = wait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "pns-origin")))
+                origin = wait(origin_tile, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.info-content"))).get_attribute('textContent')
+                prod['Product Origin'] = origin.replace('<BR>', ' ').strip()       
             except:
-                prod['Product Origin'] = ''
                 pass
             
             # scraping product delivery
+            delivery = ''
             try:
-                reg = wait(driver, 3).until(EC.presence_of_element_located((By.TAG_NAME, "pns-product-pickup")))
-                methods = wait(reg, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.delivery-options")))
-                delivery=''
+                reg = wait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "pns-product-pickup")))
+                methods = wait(reg, 5).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.delivery-options")))  
                 for method in methods:
-                    method1 = method.get_attribute('textContent')
-                    delivery += method1 +'\n'
+                    try:
+                        delivery += method.get_attribute('textContent') + '\n'
+                    except:
+                        pass
                     
                 prod['Product Delivery'] = delivery.strip("\n")
             except:
-                prod['Product Delivery'] = ''
                 pass
                 
             # scraping product description
+            description = ''
             try:
-                details = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.description-group")))
-                description=''
-                topic = wait(details, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.description-topic"))).get_attribute('textContent')
+                details = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.description-group")))  
+                topic = wait(details, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.description-topic"))).get_attribute('textContent')
                 description = description + topic.strip('"') + '\n'
-                divs = wait(details, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.detail")))
+                prod['Product Description'] = description.strip("\n") 
+                divs = wait(details, 5).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.detail")))
                 for div in divs:
-                    title = wait(div, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "h2.detail-title"))).get_attribute('textContent')
-                    content = wait(div, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.detail-content"))).get_attribute('textContent')
-                    description += title +' : '+ content + '\n'
-
-                prod['Product Description'] = description.strip("\n")    
-                
+                    try:
+                        title = wait(div, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "h2.detail-title"))).get_attribute('textContent')
+                        content = wait(div, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.detail-content"))).get_attribute('textContent')
+                        description += title +' : '+ content + '\n'
+                    except:
+                        pass                             
             except:
-                prod['Product Description'] = ''
                 pass
 
+            prod['Product Description'] = description.strip("\n") 
+
             # scraping product category
+            cat = ''
             try:
-                cat_div = wait(driver, 3).until(EC.presence_of_element_located((By.TAG_NAME, "e2-breadcrumb")))
-                cat = wait(cat_div, 3).until(EC.presence_of_all_elements_located((By.TAG_NAME, "span")))[-2].get_attribute('textContent')
+                cat_div = wait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "e2-breadcrumb")))
+                cat = wait(cat_div, 5).until(EC.presence_of_all_elements_located((By.TAG_NAME, "span")))[-2].get_attribute('textContent').strip()
                 prod['Product Category'] = cat
             except:
-                prod['Product Category'] = ''
                 pass
 
             # scraping product rating
+            rating = ''
             try:
-                rating = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.score"))).get_attribute('textContent')
+                rating = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.score"))).get_attribute('textContent')
                 rating = float(rating)
                 if rating > 0:
                     prod['Product Rating'] = rating
                 else:
                     prod['Product Rating'] = ''
             except:
-                prod['Product Rating'] = ''
-                pass
-
-            # scraping product image link
+                pass           
+            
+            # scraping Image URL link
+            url = ''
             try:
-                img_div = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.product-gallery")))
-                img = wait(img_div, 3).until(EC.presence_of_all_elements_located((By.TAG_NAME, "img")))[0]
+                img_div = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.product-gallery")))
+                img = wait(img_div, 5).until(EC.presence_of_all_elements_located((By.TAG_NAME, "img")))[0]
                 url = img.get_attribute("src")
                 if url[:6].lower() == 'https:':
-                    prod['Product Image'] = url
+                    prod['Image URL'] = url
                 else:
-                    prod['Product Image'] = 'https:' + url
+                    prod['Image URL'] = 'https:' + url
             except:
-                prod['Product Image'] = ''
+                pass      
+            
+            # scraping product offers
+            offer = ''
+            try:
+                offer = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.offer"))).get_attribute('textContent').strip()
+                prod['Promotion'] = offer
+            except:
+               pass
+
+            # scraping the product availability
+            stock = ''
+            try:
+                stock = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*=Stock]"))).get_attribute('textContent').strip()
+                prod['Availability'] = stock
+            except:
                 pass
 
-            prod['Store Name'], prod['Store Rating'],prod['Return Info'],prod['Sold'] = '', '','',''
+            prod['Input Link'] = input_links[i]
             prod['Extraction Date'] = stamp
                
             # scraping product comments
-            if settings['Scrape Comments'] != 0 and prod['Product ID'] != '' and prod['Product Title'] != '' and prod['Product Price'] != '':
+            if settings['Scrape Comments'] != 0 and prod['Product ID'] != '' and prod['Product Title'] != '' and prod['Price (HKD)'] != '':
                 revs_limit = settings['Comment Limit']
                 try:
-                    rev_div = wait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.reviews-group")))
-                    revs = wait(rev_div, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.review")))
+                    rev_div = wait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.reviews-group")))
+                    revs = wait(rev_div, 5).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.review")))
 
                     # applying the comments limit
                     nrevs = len(revs)
@@ -303,9 +332,12 @@ def scrape_prods(driver, prod_links, output1, output2, settings):
                     for k in range(nrevs):
                         try:
                             comm = {}
-                            rev = wait(revs[k], 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.review-detail"))).get_attribute('textContent')
                             try:
-                                date_content = wait(revs[k], 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.review-date"))).get_attribute('textContent')
+                                rev = wait(revs[k], 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.review-detail"))).get_attribute('textContent')
+                            except:
+                                rev = ''
+                            try:
+                                date_content = wait(revs[k], 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.review-date"))).get_attribute('textContent')
                                 elems = re.findall(r'[0-9]+', date_content)
                                 elems = elems[::-1]
                                 date = '_'.join(elems)
@@ -313,10 +345,10 @@ def scrape_prods(driver, prod_links, output1, output2, settings):
                                 date = ''
 
                             try:
-                                stars = wait(revs[k], 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "i[class='icon-star active']")))
+                                stars = wait(revs[k], 5).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "i[class='icon-star active']")))
                                 rating = len(stars)
                             except:
-                                rating = 0
+                                rating = ''
 
                             comm['Product ID'] = ID
                             comm['Comment Content'] = rev
@@ -331,7 +363,7 @@ def scrape_prods(driver, prod_links, output1, output2, settings):
                     pass
 
             # checking if the produc data has been scraped successfully
-            if prod['Product ID'] != '' and prod['Product Title'] != '' and prod['Product Price'] != '':
+            if prod['Product ID'] != '' and prod['Product Title'] != '' and prod['Price (HKD)'] != '':
                 # output scraped data
                 prods = prods.append([prod.copy()])
                 
@@ -451,8 +483,8 @@ if __name__ == '__main__':
     while True:
         try:
             driver = initialize_bot()
-            prod_links = process_links(driver, links, settings)
-            scrape_prods(driver, prod_links, output1, output2, settings)
+            prod_links, input_links = process_links(driver, links, settings)
+            scrape_prods(driver, prod_links, input_links, output1, output2, settings)
             driver.quit()
             break
         except Exception as err:
@@ -462,8 +494,8 @@ if __name__ == '__main__':
             time.sleep(5)
 
     print('-'*100)
-    elapsed = round(((time.time() - start)/60), 3)
-    hrs = round(elapsed/60, 3)
+    elapsed = round(((time.time() - start)/60), 5)
+    hrs = round(elapsed/60, 5)
     input(f'Process is completed successfully in {elapsed} mins ({hrs} hours). Press any key to exit.')
     sys.exit()
 
